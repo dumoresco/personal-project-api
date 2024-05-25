@@ -7,6 +7,7 @@ require("dotenv").config();
 import bcrypt from "bcrypt";
 import { getNextSequenceValue } from "../helpers";
 import { randomUUID } from "crypto";
+import { ObjectId } from "mongodb";
 
 interface User {
   id: string;
@@ -123,6 +124,56 @@ export class UserService {
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       res.status(500).json({ error: "Erro interno no servidor" });
+    }
+  }
+
+  async resetPassword(req: Request, res: Response) {
+    try {
+      const { oldPassword, newPassword } = req.body;
+      const { userId } = req.params;
+
+      // Verificar se oldPassword e newPassword são fornecidos
+      if (!oldPassword || !newPassword) {
+        return res.status(400).json({
+          message: "É necessário fornecer a senha antiga e a nova senha",
+        });
+      }
+
+      const db = await connectToDatabase();
+      const usersCollection = db.collection("users");
+
+      // Verificar se o usuário existe
+      const user = await usersCollection.findOne({ id: userId });
+      if (!user) {
+        return res.status(400).json({ message: "Usuário não encontrado" });
+      }
+
+      // Verificar se a senha antiga está correta
+      const isValidPassword = await bcrypt.compare(oldPassword, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: "Senha antiga incorreta" });
+      }
+
+      // Hash da nova senha
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // Atualizar a senha do usuário
+      await usersCollection.updateOne(
+        { id: userId },
+        // updateAt é a data atual
+        {
+          $set: {
+            password: hashedPassword,
+            updatedAt: new Date().toISOString(),
+          },
+        }
+      );
+
+      // retorna obj data com o usuario atualizado
+      res.status(200).json({ message: "Senha resetada com sucesso", user });
+    } catch (error) {
+      console.log("Erro ao resetar a senha", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
     }
   }
 }
