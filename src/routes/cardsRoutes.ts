@@ -6,7 +6,6 @@ const cardController = new CardService();
 router.post("/cards/:userId", cardController.createCard);
 router.get("/cards/:userId", cardController.listCards);
 router.delete("/cards/:cardId/:userId", cardController.deleteCard);
-// update card show at dashboard
 router.patch(
   "/cards/:cardId/:userId",
   cardController.updateCardShowAtDashboard

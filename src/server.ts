@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes";
 import cardRoutes from "./routes/cardsRoutes";
+import transactionRoutes from "./routes/transactionsRoutes";
 import cors from "cors";
 
 dotenv.config();
@@ -20,6 +21,7 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(userRoutes);
 app.use(cardRoutes);
+app.use(transactionRoutes);
 
 const port = process.env.PORT;
 app.listen(port, () => {
