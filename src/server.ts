@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes";
 import cardRoutes from "./routes/cardsRoutes";
 import transactionRoutes from "./routes/transactionsRoutes";
+import betRoutes from "./routes/betRoutes";
 import cors from "cors";
 
 dotenv.config();
@@ -22,6 +23,7 @@ app.use(cors());
 app.use(userRoutes);
 app.use(cardRoutes);
 app.use(transactionRoutes);
+app.use(betRoutes);
 
 const port = process.env.PORT;
 app.listen(port, () => {
