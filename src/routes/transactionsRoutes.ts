@@ -20,4 +20,10 @@ router.get(
   "/transactions/chart/:userId",
   transactionController.getMonthlyBalances
 );
+
+router.post(
+  "/mock-transactions/:userId",
+  transactionController.mockTransactions
+);
+
 export default router;

@@ -11,6 +11,8 @@ import {
   startOfYear,
 } from "date-fns";
 
+import { toZonedTime } from "date-fns-tz";
+
 require("dotenv").config();
 interface User {
   id: string;
@@ -99,7 +101,6 @@ export class TransactionService {
 
       res.status(201).json({ message: "Transação realizada com sucesso" });
     } catch (error) {
-      console.log(error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   }
@@ -107,7 +108,14 @@ export class TransactionService {
   async listTransactions(req: Request, res: Response) {
     try {
       const { userId } = req.params;
-      const { search, bank, startDate, endDate } = req.query;
+      const {
+        search,
+        bank,
+        startDate,
+        endDate,
+        limit = "10",
+        page = "1",
+      } = req.query;
 
       const db = await connectToDatabase();
       const usersCollection = db.collection<User>("users");
@@ -119,7 +127,7 @@ export class TransactionService {
 
       const transactionsCollection = db.collection("transactions");
 
-      let query: any = { "card.userId": userId };
+      let query: any = {};
 
       if (search) {
         query = {
@@ -143,10 +151,33 @@ export class TransactionService {
         };
       }
 
-      const transactions = await transactionsCollection.find(query).toArray();
+      // Convert limit and page to numbers
+      const limitNumber = parseInt(limit as string, 10);
+      const pageNumber = parseInt(page as string, 10);
+      const skip = (pageNumber - 1) * limitNumber;
 
-      res.status(200).json({ message: "Transações encontradas", transactions });
+      console.log("Query:", query);
+      console.log("Limit:", limitNumber, "Page:", pageNumber, "Skip:", skip);
+      const transactions = await transactionsCollection
+        .find(query)
+        .skip(skip)
+        .limit(limitNumber)
+        .toArray();
+
+      // Get the total count of transactions for the query
+      const totalCount = await transactionsCollection.countDocuments(query);
+
+      console.log("Transactions:", transactions);
+
+      res.status(200).json({
+        message: "Transações encontradas",
+        transactions,
+        totalPages: Math.ceil(totalCount / limitNumber),
+        currentPage: pageNumber,
+        totalCount,
+      });
     } catch (error) {
+      console.log("Error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   }
@@ -277,22 +308,101 @@ export class TransactionService {
       // Itere sobre as transações e acumule os valores
       transactions.forEach((transaction) => {
         const monthIndex = getMonth(new Date(transaction.date));
-        console.log("Month index:", monthIndex);
         if (transaction.type === "income") {
           months[monthIndex].income += transaction.value;
-          console.log("Income:", months[monthIndex].income);
         } else if (transaction.type === "expense") {
           months[monthIndex].outcome += transaction.value;
         }
       });
-
-      console.log("Transactions:", transactions);
 
       return res.json(months);
     } catch (error) {
       return res
         .status(500)
         .json({ error: "An error occurred while fetching monthly balances" });
+    }
+  }
+
+  async mockTransactions(req: Request, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      const db = await connectToDatabase();
+      const usersCollection = db.collection<User>("users");
+
+      const user = await usersCollection.findOne({ id: userId });
+      if (!user) {
+        return res.status(400).json({ message: "Usuário não encontrado" });
+      }
+
+      const cardsCollection = db.collection("cards");
+      const transactionsCollection = await connectToDatabase().then((db) =>
+        db.collection("transactions")
+      );
+      const cards = await cardsCollection.find({ userId }).toArray();
+
+      if (cards.length === 0) {
+        return res
+          .status(400)
+          .json({ message: "Nenhum cartão encontrado para o usuário" });
+      }
+
+      const types = ["income", "expense"];
+      const now = new Date();
+      const yearStart = startOfYear(now);
+      const yearEnd = endOfYear(now);
+      const months = eachMonthOfInterval({ start: yearStart, end: yearEnd });
+
+      const mockTransactions = [];
+
+      for (let i = 0; i < 50; i++) {
+        const card = cards[Math.floor(Math.random() * cards.length)];
+        const type = types[Math.floor(Math.random() * types.length)];
+        const value = Math.floor(Math.random() * 1000) + 1; // Valor entre 1 e 1000
+        const randomMonth = months[Math.floor(Math.random() * months.length)];
+        const date = format(
+          toZonedTime(randomMonth, "America/Sao_Paulo"),
+          "yyyy-MM-dd'T'HH:mm:ssXXX"
+        );
+
+        const transaction = {
+          id: randomUUID(),
+          card,
+          value,
+          name: `Mock Transaction ${i + 1}`,
+          type,
+          date,
+          description: `Description for Mock Transaction ${i + 1}`,
+          createdAt: new Date().toISOString(),
+        };
+
+        mockTransactions.push(transaction);
+
+        if (type === "expense") {
+          card.value -= value;
+        } else if (type === "income") {
+          card.value += value;
+        }
+
+        await cardsCollection.updateOne(
+          { _id: card._id },
+          {
+            $set: {
+              value: card.value,
+              updatedAt: new Date().toISOString(),
+            },
+          }
+        );
+      }
+
+      await transactionsCollection.insertMany(mockTransactions);
+
+      res.status(201).json({
+        message: "50 transações mock criadas com sucesso",
+        transactions: mockTransactions,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Erro interno do servidor" });
     }
   }
 }
