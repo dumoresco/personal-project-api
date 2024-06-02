@@ -1,8 +1,15 @@
 import { Request, Response } from "express";
 import { connectToDatabase } from "../database/db";
 import { randomUUID } from "crypto";
-import { ObjectId } from "mongodb";
+import { ObjectId, Transaction } from "mongodb";
 import { start } from "repl";
+import {
+  eachMonthOfInterval,
+  endOfYear,
+  format,
+  getMonth,
+  startOfYear,
+} from "date-fns";
 
 require("dotenv").config();
 interface User {
@@ -14,6 +21,14 @@ interface User {
   createdAt: string;
   updatedAt: string;
   pin: number;
+}
+interface MonthlyTransaction {
+  income: number;
+  outcome: number;
+}
+
+interface MonthlyTransactions {
+  [key: number]: MonthlyTransaction;
 }
 export class TransactionService {
   async createTransaction(req: Request, res: Response) {
@@ -237,6 +252,47 @@ export class TransactionService {
       res.status(200).json({ message: "Transação deletada com sucesso" });
     } catch (error) {
       res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  }
+  async getMonthlyBalances(req: Request, res: Response): Promise<Response> {
+    try {
+      // Obtenha todas as transações do banco de dados
+      const transactionsCollection = await connectToDatabase().then((db) =>
+        db.collection("transactions")
+      );
+      const transactions = await transactionsCollection.find().toArray();
+
+      // Inicialize o array de meses com propriedades income e outcome
+      const yearStart = startOfYear(new Date());
+      const yearEnd = endOfYear(new Date());
+      const months = eachMonthOfInterval({
+        start: yearStart,
+        end: yearEnd,
+      }).map((date) => ({
+        month: format(date, "MMMM"),
+        income: 0,
+        outcome: 0,
+      }));
+
+      // Itere sobre as transações e acumule os valores
+      transactions.forEach((transaction) => {
+        const monthIndex = getMonth(new Date(transaction.date));
+        console.log("Month index:", monthIndex);
+        if (transaction.type === "income") {
+          months[monthIndex].income += transaction.value;
+          console.log("Income:", months[monthIndex].income);
+        } else if (transaction.type === "expense") {
+          months[monthIndex].outcome += transaction.value;
+        }
+      });
+
+      console.log("Transactions:", transactions);
+
+      return res.json(months);
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ error: "An error occurred while fetching monthly balances" });
     }
   }
 }

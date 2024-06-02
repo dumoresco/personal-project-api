@@ -58,13 +58,22 @@ export class BetService {
 
       const betsCollection = db.collection("bets");
 
-      const result = await betsCollection.insertOne(newBet);
-      if (!result.acknowledged) {
-        return res.status(500).json({ message: "Error creating bet" });
+      // pega a banca e diminui o valor da aposta
+
+      const newBanca = user.banca - value;
+
+      if (newBanca < 0) {
+        return res.status(400).json({ message: "Insufficient funds" });
       }
-      return res
-        .status(201)
-        .json({ message: "Bet created successfully", bet: newBet });
+
+      await usersCollection.updateOne(
+        { id: userId },
+        { $set: { banca: newBanca, updatedAt: new Date().toISOString() } }
+      );
+
+      await betsCollection.insertOne(newBet);
+
+      return res.status(201).json(newBet);
     } catch (error) {
       console.error("Error creating bet:", error);
       return res.status(500).json({ message: "Internal server error" });
@@ -91,13 +100,12 @@ export class BetService {
       }
 
       let resultado = 0;
+      const user = await usersCollection.findOne({ id: bet.userId });
       if (status === "win") {
         resultado = bet.value * bet.odd;
       } else if (status === "loss") {
-        resultado = -bet.value;
       }
 
-      const user = await usersCollection.findOne({ id: bet.userId });
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -144,11 +152,11 @@ export class BetService {
       const bets = await betsCollection.find({ userId }).toArray();
       const user = await usersCollection.findOne({ id: userId });
 
-      // se user.banca não existir, cria com valor de 1000
+      // se user.banca não existir, cria com valor de 1240
       if (!user?.banca) {
         await usersCollection.updateOne(
           { id: userId },
-          { $set: { banca: 1000, updatedAt: new Date().toISOString() } }
+          { $set: { banca: 1240, updatedAt: new Date().toISOString() } }
         );
       }
 
@@ -170,7 +178,7 @@ export class BetService {
       const usersCollection = db.collection("users");
 
       const result = await betsCollection.deleteMany({});
-      await usersCollection.updateMany({}, { $set: { banca: 1000 } });
+      await usersCollection.updateMany({}, { $set: { banca: 1240 } });
 
       return res.status(200).json({
         message: "All bets deleted successfully and all balances reset",

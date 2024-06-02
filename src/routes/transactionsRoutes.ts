@@ -15,4 +15,9 @@ router.delete(
   "/transactions/:userId/:transactionId",
   transactionController.deleteTransaction
 );
+
+router.get(
+  "/transactions/chart/:userId",
+  transactionController.getMonthlyBalances
+);
 export default router;
