@@ -417,6 +417,7 @@ export class TransactionService {
       }
 
       const transactionsCollection = db.collection("transactions");
+      const savingsCollection = db.collection("savings");
 
       const now = new Date();
       let currentMonthStart = startOfDay(startOfMonth(now));
@@ -485,6 +486,23 @@ export class TransactionService {
         ? ((currentBalance - previousBalance) / previousBalance) * 100
         : 0;
 
+      // pega todos os savings pela propriedade total_Saved e soma
+      const savings = await savingsCollection.find({ userId }).toArray();
+      let totalSaved = 0;
+
+      savings.forEach((saving) => {
+        totalSaved += saving.total_saved;
+      });
+
+      console.log("Savings", savings);
+      console.log("Total Saved", totalSaved);
+
+      const saving = {
+        current: totalSaved,
+        previous: totalSaved,
+        difference: totalSaved.toFixed(2),
+      };
+
       const income = {
         current: currentIncome,
         previous: previousIncome,
@@ -507,6 +525,7 @@ export class TransactionService {
         income,
         outcome,
         balance,
+        saving,
       });
     } catch (error) {
       return res
