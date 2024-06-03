@@ -5,13 +5,18 @@ import { ObjectId, Transaction } from "mongodb";
 import { start } from "repl";
 import {
   eachMonthOfInterval,
+  endOfDay,
+  endOfMonth,
   endOfYear,
   format,
   getMonth,
+  startOfDay,
+  startOfMonth,
   startOfYear,
+  subMonths,
 } from "date-fns";
 
-import { toZonedTime } from "date-fns-tz";
+import { getTimezoneOffset, toZonedTime } from "date-fns-tz";
 
 require("dotenv").config();
 interface User {
@@ -156,8 +161,6 @@ export class TransactionService {
       const pageNumber = parseInt(page as string, 10);
       const skip = (pageNumber - 1) * limitNumber;
 
-      console.log("Query:", query);
-      console.log("Limit:", limitNumber, "Page:", pageNumber, "Skip:", skip);
       const transactions = await transactionsCollection
         .find(query)
         .skip(skip)
@@ -167,8 +170,6 @@ export class TransactionService {
       // Get the total count of transactions for the query
       const totalCount = await transactionsCollection.countDocuments(query);
 
-      console.log("Transactions:", transactions);
-
       res.status(200).json({
         message: "Transações encontradas",
         transactions,
@@ -177,7 +178,6 @@ export class TransactionService {
         totalCount,
       });
     } catch (error) {
-      console.log("Error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   }
@@ -403,6 +403,115 @@ export class TransactionService {
       });
     } catch (error) {
       res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  }
+  async getCurrentMonthBalance(req: Request, res: Response): Promise<Response> {
+    try {
+      const { userId } = req.params;
+
+      const db = await connectToDatabase();
+      const usersCollection = db.collection<User>("users");
+      const user = await usersCollection.findOne({ id: userId });
+      if (!user) {
+        return res.status(400).json({ message: "Usuário não encontrado" });
+      }
+
+      const transactionsCollection = db.collection("transactions");
+
+      const now = new Date();
+      let currentMonthStart = startOfDay(startOfMonth(now));
+      let currentMonthEnd = endOfMonth(now);
+      currentMonthStart.setDate(currentMonthStart.getDate() - 1);
+      currentMonthEnd.setDate(currentMonthEnd.getDate() - 1);
+
+      let previousMonthStart = startOfMonth(subMonths(now, 1));
+      let previousMonthEnd = endOfMonth(subMonths(now, 1));
+      previousMonthStart.setDate(previousMonthStart.getDate() - 1);
+      previousMonthEnd.setDate(previousMonthEnd.getDate() - 1);
+
+      const currentMonthTransactions = await transactionsCollection
+        .find({
+          "card.userId": userId,
+          date: {
+            $gte: currentMonthStart.toISOString(),
+            $lte: currentMonthEnd.toISOString(),
+          },
+        })
+        .toArray();
+
+      let currentIncome = 0;
+      let currentOutcome = 0;
+
+      currentMonthTransactions.forEach((transaction) => {
+        if (transaction.type === "income") {
+          currentIncome += transaction.value;
+        } else if (transaction.type === "expense") {
+          currentOutcome += transaction.value;
+        }
+      });
+
+      const currentBalance = currentIncome - currentOutcome;
+
+      // Previous month transactions
+      const previousMonthTransactions = await transactionsCollection
+        .find({
+          "card.userId": userId,
+          date: {
+            $gte: previousMonthStart.toISOString(),
+            $lte: previousMonthEnd.toISOString(),
+          },
+        })
+        .toArray();
+
+      let previousIncome = 0;
+      let previousOutcome = 0;
+
+      previousMonthTransactions.forEach((transaction) => {
+        if (transaction.type === "income") {
+          previousIncome += transaction.value;
+        } else if (transaction.type === "expense") {
+          previousOutcome += transaction.value;
+        }
+      });
+
+      const previousBalance = previousIncome - previousOutcome;
+      const incomeDifference = previousIncome
+        ? ((currentIncome - previousIncome) / previousIncome) * 100
+        : 0;
+      const outcomeDifference = previousOutcome
+        ? ((currentOutcome - previousOutcome) / previousOutcome) * 100
+        : 0;
+      const balanceDifference = previousBalance
+        ? ((currentBalance - previousBalance) / previousBalance) * 100
+        : 0;
+
+      const income = {
+        current: currentIncome,
+        previous: previousIncome,
+        difference: incomeDifference.toFixed(2),
+      };
+
+      const outcome = {
+        current: currentOutcome,
+        previous: previousOutcome,
+        difference: outcomeDifference.toFixed(2),
+      };
+
+      const balance = {
+        current: currentBalance,
+        previous: previousBalance,
+        difference: balanceDifference.toFixed(2),
+      };
+
+      return res.json({
+        income,
+        outcome,
+        balance,
+      });
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ message: "Erro ao obter balanço do mês atual" });
     }
   }
 }

@@ -26,4 +26,9 @@ router.post(
   transactionController.mockTransactions
 );
 
+// getCurrentMonthBalance
+router.get("/balance/:userId", (req, res) =>
+  transactionController.getCurrentMonthBalance(req, res)
+);
+
 export default router;
