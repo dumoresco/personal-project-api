@@ -5,7 +5,9 @@ import cardRoutes from "./routes/cardsRoutes";
 import transactionRoutes from "./routes/transactionsRoutes";
 import betRoutes from "./routes/betRoutes";
 import savingRoutes from "./routes/savingRoutes";
+import habitRoutes from "./routes/habitRoutes";
 import cors from "cors";
+import axios from "axios";
 
 dotenv.config();
 
@@ -20,14 +22,108 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get("/api/emissao/passivosoperacoes", async (req: any, res: any) => {
+  console.log("req.query", req.s);
+
+  const ativosQuery = req?.query?.ativos?.reduce(
+    (acc: any, ativo: string, index: number) => {
+      acc[`ativos[${index}]`] = ativo;
+      return acc;
+    },
+    {}
+  );
+  console.log("ativosQuery", ativosQuery);
+  try {
+    const response = await axios.get(
+      "https://portal-prod-api-portfolio-bff.azurewebsites.net/v1/api/emissao/passivosoperacoes",
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Allow-Control-Allow-Origin": "*",
+        },
+        params: {
+          ...req.query,
+          ...ativosQuery,
+        },
+      }
+    );
+
+    res.json(response.data);
+  } catch (error) {
+    console.error("Erro ao buscar dados:", error);
+    res.status(500).json({ error: "Erro ao buscar dados" });
+  }
+});
+
+app.get("/api/emissao/passivosoperacoes/detalhe", async (req, res) => {
+  try {
+    const response = await axios.get(
+      "https://portal-prod-api-portfolio-bff.azurewebsites.net/v1/api/emissao/passivosoperacoes/detalhe",
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Allow-Control-Allow-Origin": "*",
+        },
+        params: req.query,
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error("Erro ao buscar dados:", error);
+    res.status(500).json({ error: "Erro ao buscar dados" });
+  }
+});
+
+app.get(
+  "/api/emissao/precificacoes/detalhe/fluxofinanceiro/grafico",
+  async (req, res) => {
+    try {
+      const response = await axios.get(
+        "https://portal-prod-api-portfolio-bff.azurewebsites.net/v1/api/emissao/precificacoes/detalhe/fluxofinanceiro/grafico",
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Allow-Control-Allow-Origin": "*",
+          },
+          params: req.query,
+        }
+      );
+      res.json(response.data);
+    } catch (error) {
+      console.error("Erro ao buscar dados:", error);
+      res.status(500).json({ error: "Erro ao buscar dados" });
+    }
+  }
+);
+
+app.get("/api/cedoc/files", async (req, res) => {
+  try {
+    const response = await axios.get(
+      "https://portal-prod-api-portfolio-bff.azurewebsites.net/v1/api/cedoc/files",
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Allow-Control-Allow-Origin": "*",
+        },
+        params: req.query,
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error("Erro ao buscar dados:", error);
+    res.status(500).json({ error: "Erro ao buscar dados" });
+  }
+});
+
 app.use(cors());
 app.use(userRoutes);
 app.use(cardRoutes);
 app.use(transactionRoutes);
 app.use(betRoutes);
 app.use(savingRoutes);
+app.use(habitRoutes);
 
-const port = process.env.PORT;
+const port = 8002;
 app.listen(port, () => {
   console.log(`Servidor ouvindo na porta ${port}`);
 });

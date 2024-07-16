@@ -1,15 +1,21 @@
 import { Request, Response } from "express";
 import { connectToDatabase } from "../database/db";
 import { randomUUID } from "crypto";
-import { ObjectId, Transaction } from "mongodb";
+import { Document, ObjectId, Transaction, WithId } from "mongodb";
 import { start } from "repl";
 import {
+  addDays,
+  addWeeks,
   eachMonthOfInterval,
+  eachWeekOfInterval,
   endOfDay,
   endOfMonth,
   endOfYear,
   format,
   getMonth,
+  isAfter,
+  isBefore,
+  isWithinInterval,
   startOfDay,
   startOfMonth,
   startOfYear,
@@ -17,6 +23,7 @@ import {
 } from "date-fns";
 
 import { getTimezoneOffset, toZonedTime } from "date-fns-tz";
+import { z } from "zod";
 
 require("dotenv").config();
 interface User {
@@ -533,4 +540,105 @@ export class TransactionService {
         .json({ message: "Erro ao obter balanço do mês atual" });
     }
   }
+
+  addNewEventSchema = z.object({
+    title: z.string().min(1, { message: "O título é obrigatório" }),
+    start: z.string().min(1, { message: "A data de início é obrigatória" }),
+    end: z.string().min(1, { message: "A data de término é obrigatória" }),
+    repeat: z.enum(["daily", "weekly", "monthly", "yearly"], {
+      message: "Repetição inválida",
+    }),
+    color: z.enum(["purple", "blue", "green", "yellow", "red"], {
+      message: "Cor inválida",
+    }),
+  });
+
+  async createEvent(req: Request, res: Response) {
+    try {
+      const eventValidation = this.addNewEventSchema.safeParse(req.body);
+      if (!eventValidation.success) {
+        return res.status(400).json({
+          message: "Invalid event data",
+          errors: eventValidation.error.errors,
+        });
+      }
+
+      const { title, start, end, repeat, color } = eventValidation.data;
+
+      const db = await connectToDatabase();
+      const usersCollection = db.collection<User>("users");
+
+      const user = await usersCollection.findOne({ id: req.params.userId });
+      if (!user) {
+        return res.status(400).json({ message: "User not found" });
+      }
+
+      const eventsCollection = db.collection("events");
+
+      const event = {
+        id: randomUUID(),
+        userId: req.params.userId,
+        title,
+        start,
+        end,
+        repeat,
+        color,
+        createdAt: new Date().toISOString(),
+      };
+
+      await eventsCollection.insertOne(event);
+
+      res.status(201).json({ message: "Event created successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
+  async listEventsByMonth(req: Request, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      const db = await connectToDatabase();
+      const eventsCollection = db.collection("events");
+
+      const events = await eventsCollection
+        .find({
+          userId,
+        })
+        .toArray();
+
+      return res.status(200).json({ events: events });
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  }
+
+  // Função para formatar uma data para o formato ISO 8601 (yyyy-MM-ddTHH:mm:ss.SSSZ)
+}
+
+function formatDate(date: Date): string {
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const year = date.getFullYear();
+  return `${year}-${month}-${day}T00:00:00.000Z`;
+}
+
+function resolveRecurrences(
+  event: WithId<Document>,
+  startDate: Date,
+  endDate: Date
+) {
+  const resolvedEvents = [];
+  let currentDate = new Date(event.start);
+
+  while (isBefore(currentDate, endDate)) {
+    if (isAfter(currentDate, startDate) || isBefore(currentDate, startDate)) {
+      resolvedEvents.push({ ...event, start: new Date(currentDate) });
+    }
+
+    // Avançar para o próximo dia
+    currentDate = addDays(currentDate, 1);
+  }
+
+  return resolvedEvents;
 }

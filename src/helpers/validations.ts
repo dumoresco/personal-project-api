@@ -1,7 +1,6 @@
 import { Collection } from "mongoose";
 import { CreateUserPayload } from "../models/user/IUser";
 import { Db } from "mongodb";
-import { User } from "../services/UserService";
 import bcrypt from "bcrypt";
 export const validateCreateUserFields = (payload: CreateUserPayload) => {
   const { name, email, password } = payload;
@@ -22,7 +21,7 @@ export const validateCreateUserFields = (payload: CreateUserPayload) => {
   throw new Error(errors.join(", "));
 };
 
-export const validatePassword = async (user: User, password: string) => {
+export const validatePassword = async (user: any, password: string) => {
   const isValidPassword = await bcrypt.compare(password, user.password);
 
   if (!isValidPassword) {
@@ -31,7 +30,7 @@ export const validatePassword = async (user: User, password: string) => {
 };
 
 export const validateEmailAlreadyExists = async (email: string, db: Db) => {
-  const usersCollection = db.collection<User>("users");
+  const usersCollection = db.collection<any>("users");
   const existingEmail = await usersCollection.findOne({ email });
 
   if (existingEmail) {

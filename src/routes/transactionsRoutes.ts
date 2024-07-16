@@ -31,4 +31,13 @@ router.get("/balance/:userId", (req, res) =>
   transactionController.getCurrentMonthBalance(req, res)
 );
 
+// add event
+router.post("/event/:userId", (req, res) =>
+  transactionController.createEvent(req, res)
+);
+
+// get events
+router.get("/events/:userId", (req, res) =>
+  transactionController.listEventsByMonth(req, res)
+);
 export default router;
