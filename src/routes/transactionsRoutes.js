@@ -9,6 +9,8 @@ router.get("/transactions/:userId", transactionController.listTransactions);
 router.delete("/transactions/:userId", transactionController.deleteAllTransactions);
 router.delete("/transactions/:userId/:transactionId", transactionController.deleteTransaction);
 router.get("/transactions/chart/:userId", transactionController.getMonthlyBalances);
+// update transaction
+router.put("/transactions/:userId/:transactionId", transactionController.updateTransaction);
 router.post("/mock-transactions/:userId", transactionController.mockTransactions);
 // getCurrentMonthBalance
 router.get("/balance/:userId", (req, res) => transactionController.getCurrentMonthBalance(req, res));

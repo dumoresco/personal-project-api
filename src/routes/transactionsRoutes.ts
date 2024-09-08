@@ -21,6 +21,12 @@ router.get(
   transactionController.getMonthlyBalances
 );
 
+// update transaction
+router.put(
+  "/transactions/:userId/:transactionId",
+  transactionController.updateTransaction
+);
+
 router.post(
   "/mock-transactions/:userId",
   transactionController.mockTransactions

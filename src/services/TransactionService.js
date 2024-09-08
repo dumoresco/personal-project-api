@@ -94,7 +94,10 @@ class TransactionService {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { userId } = req.params;
-                const { search, bank, startDate, endDate, limit = "10", page = "1", } = req.query;
+                const { search, bank, startDate, endDate } = req.query;
+                // Obter page, size, search e status da query string, com valores padrão
+                const page = parseInt(req.query.page) || 1; // Página atual (padrão: 1)
+                const size = parseInt(req.query.size) || 10; // Tamanho da página (padrão: 10)
                 const db = yield (0, db_1.connectToDatabase)();
                 const usersCollection = db.collection("users");
                 const user = yield usersCollection.findOne({ id: userId });
@@ -102,6 +105,7 @@ class TransactionService {
                     return res.status(400).json({ message: "Usuário não encontrado" });
                 }
                 const transactionsCollection = db.collection("transactions");
+                const total = yield transactionsCollection.countDocuments();
                 let query = {};
                 if (search) {
                     query = Object.assign(Object.assign({}, query), { name: { $regex: search, $options: "i" } });
@@ -116,23 +120,21 @@ class TransactionService {
                         $lte: endDate,
                     };
                 }
-                // Convert limit and page to numbers
-                const limitNumber = parseInt(limit, 10);
-                const pageNumber = parseInt(page, 10);
-                const skip = (pageNumber - 1) * limitNumber;
+                // Calcular quantos registros pular (skip) e quantos limitar (limit)
+                const skip = (page - 1) * size;
                 const transactions = yield transactionsCollection
                     .find(query)
-                    .skip(skip)
-                    .limit(limitNumber)
+                    .skip(skip) // Pular registros conforme a página
+                    .limit(size) // Limitar o número de registros por página
                     .toArray();
                 // Get the total count of transactions for the query
-                const totalCount = yield transactionsCollection.countDocuments(query);
+                const totalPages = Math.ceil(total / size);
                 res.status(200).json({
-                    message: "Transações encontradas",
                     transactions,
-                    totalPages: Math.ceil(totalCount / limitNumber),
-                    currentPage: pageNumber,
-                    totalCount,
+                    totalPages,
+                    currentPage: page,
+                    pageSize: size,
+                    total,
                 });
             }
             catch (error) {
@@ -431,6 +433,78 @@ class TransactionService {
                 return res
                     .status(500)
                     .json({ message: "Erro ao obter balanço do mês atual" });
+            }
+        });
+    }
+    updateTransaction(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { userId, transactionId } = req.params;
+                const { cardId, name, value, description, type, date } = req.body;
+                if (!cardId || !value || !type || !date) {
+                    return res.status(400).json({
+                        message: "Cartão, valor, tipo e data são obrigatórios",
+                    });
+                }
+                const db = yield (0, db_1.connectToDatabase)();
+                const usersCollection = db.collection("users");
+                // Verificar se o usuário existe
+                const user = yield usersCollection.findOne({ id: userId });
+                if (!user) {
+                    return res.status(400).json({ message: "Usuário não encontrado" });
+                }
+                const transactionsCollection = db.collection("transactions");
+                // Verificar se a transação existe
+                const transaction = yield transactionsCollection.findOne({
+                    id: transactionId,
+                    "card.userId": userId,
+                });
+                if (!transaction) {
+                    return res.status(400).json({ message: "Transação não encontrada" });
+                }
+                const cardsCollection = db.collection("cards");
+                const card = yield cardsCollection.findOne({
+                    _id: new mongodb_1.ObjectId(cardId),
+                    userId,
+                });
+                if (!card) {
+                    return res.status(400).json({ message: "Cartão não encontrado" });
+                }
+                // Atualizar o saldo do cartão
+                if (transaction.type === "expense") {
+                    card.value += transaction.value; // Reverter o valor da transação original
+                }
+                else if (transaction.type === "income") {
+                    card.value -= transaction.value;
+                }
+                // Atualizar o saldo do cartão com a nova transação
+                if (type === "expense") {
+                    card.value -= value;
+                }
+                else if (type === "income") {
+                    card.value += value;
+                }
+                yield cardsCollection.updateOne({ _id: new mongodb_1.ObjectId(cardId) }, {
+                    $set: {
+                        value: card.value,
+                        updatedAt: new Date().toISOString(),
+                    },
+                });
+                // Atualizar a transação
+                yield transactionsCollection.updateOne({ id: transactionId }, {
+                    $set: {
+                        name,
+                        value,
+                        description,
+                        type,
+                        date,
+                        updatedAt: new Date().toISOString(),
+                    },
+                });
+                res.status(200).json({ message: "Transação atualizada com sucesso" });
+            }
+            catch (error) {
+                res.status(500).json({ message: "Erro interno do servidor" });
             }
         });
     }

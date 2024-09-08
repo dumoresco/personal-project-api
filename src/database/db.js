@@ -12,20 +12,24 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.connectToDatabase = void 0;
 require("dotenv").config();
 const mongodb_1 = require("mongodb");
-const url = `mongodb+srv://${process.env.MONGO_DB_USER}:${process.env.MONGO_DB_PASSWORD}@finances.w43q48h.mongodb.net/?retryWrites=true&w=majority`;
+const url = `mongodb+srv://${process.env.MONGO_DB_USER}:${process.env.MONGO_DB_PASSWORD}@freecluster.klwjk.mongodb.net/?retryWrites=true&w=majority&appName=FreeCluster`;
 const DB_NAME = process.env.MONGO_DB_NAME;
 function connectToDatabase() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const client = new mongodb_1.MongoClient(url, {
-                useUnifiedTopology: true,
+                serverApi: {
+                    version: mongodb_1.ServerApiVersion.v1,
+                    strict: true,
+                    deprecationErrors: true,
+                },
             });
             yield client.connect();
+            yield client.db("admin").command({ ping: 1 });
             console.log("Conexão com o MongoDB estabelecida com sucesso");
             return client.db(DB_NAME);
         }
         catch (error) {
-            console.error("Erro ao conectar ao MongoDB", error);
             throw error;
         }
     });

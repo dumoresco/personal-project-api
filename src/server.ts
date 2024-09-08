@@ -3,9 +3,7 @@ import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes";
 import cardRoutes from "./routes/cardsRoutes";
 import transactionRoutes from "./routes/transactionsRoutes";
-import betRoutes from "./routes/betRoutes";
 import savingRoutes from "./routes/savingRoutes";
-import habitRoutes from "./routes/habitRoutes";
 import cors from "cors";
 import axios from "axios";
 
@@ -116,14 +114,12 @@ app.get("/api/cedoc/files", async (req, res) => {
 });
 
 app.use(cors());
-app.use(userRoutes);
+app.use("/auth", userRoutes);
 app.use(cardRoutes);
 app.use(transactionRoutes);
-app.use(betRoutes);
 app.use(savingRoutes);
-app.use(habitRoutes);
 
-const port = 8002;
+const port = 8000;
 app.listen(port, () => {
   console.log(`Servidor ouvindo na porta ${port}`);
 });

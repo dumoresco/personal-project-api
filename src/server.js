@@ -17,9 +17,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const cardsRoutes_1 = __importDefault(require("./routes/cardsRoutes"));
 const transactionsRoutes_1 = __importDefault(require("./routes/transactionsRoutes"));
-const betRoutes_1 = __importDefault(require("./routes/betRoutes"));
 const savingRoutes_1 = __importDefault(require("./routes/savingRoutes"));
-const habitRoutes_1 = __importDefault(require("./routes/habitRoutes"));
 const cors_1 = __importDefault(require("cors"));
 const axios_1 = __importDefault(require("axios"));
 dotenv_1.default.config();
@@ -104,13 +102,11 @@ app.get("/api/cedoc/files", (req, res) => __awaiter(void 0, void 0, void 0, func
     }
 }));
 app.use((0, cors_1.default)());
-app.use(userRoutes_1.default);
+app.use("/auth", userRoutes_1.default);
 app.use(cardsRoutes_1.default);
 app.use(transactionsRoutes_1.default);
-app.use(betRoutes_1.default);
 app.use(savingRoutes_1.default);
-app.use(habitRoutes_1.default);
-const port = 8002;
+const port = 8000;
 app.listen(port, () => {
     console.log(`Servidor ouvindo na porta ${port}`);
 });

@@ -120,15 +120,10 @@ export class TransactionService {
   async listTransactions(req: Request, res: Response) {
     try {
       const { userId } = req.params;
-      const {
-        search,
-        bank,
-        startDate,
-        endDate,
-        limit = "10",
-        page = "1",
-      } = req.query;
-
+      const { search, bank, startDate, endDate } = req.query;
+      // Obter page, size, search e status da query string, com valores padrão
+      const page = parseInt(req.query.page as string) || 1; // Página atual (padrão: 1)
+      const size = parseInt(req.query.size as string) || 10; // Tamanho da página (padrão: 10)
       const db = await connectToDatabase();
       const usersCollection = db.collection<User>("users");
 
@@ -138,6 +133,7 @@ export class TransactionService {
       }
 
       const transactionsCollection = db.collection("transactions");
+      const total = await transactionsCollection.countDocuments();
 
       let query: any = {};
 
@@ -163,26 +159,22 @@ export class TransactionService {
         };
       }
 
-      // Convert limit and page to numbers
-      const limitNumber = parseInt(limit as string, 10);
-      const pageNumber = parseInt(page as string, 10);
-      const skip = (pageNumber - 1) * limitNumber;
-
+      // Calcular quantos registros pular (skip) e quantos limitar (limit)
+      const skip = (page - 1) * size;
       const transactions = await transactionsCollection
         .find(query)
-        .skip(skip)
-        .limit(limitNumber)
+        .skip(skip) // Pular registros conforme a página
+        .limit(size) // Limitar o número de registros por página
         .toArray();
 
       // Get the total count of transactions for the query
-      const totalCount = await transactionsCollection.countDocuments(query);
-
+      const totalPages = Math.ceil(total / size);
       res.status(200).json({
-        message: "Transações encontradas",
         transactions,
-        totalPages: Math.ceil(totalCount / limitNumber),
-        currentPage: pageNumber,
-        totalCount,
+        totalPages,
+        currentPage: page,
+        pageSize: size,
+        total,
       });
     } catch (error) {
       res.status(500).json({ message: "Erro interno do servidor" });
@@ -552,7 +544,90 @@ export class TransactionService {
       message: "Cor inválida",
     }),
   });
+  async updateTransaction(req: Request, res: Response) {
+    try {
+      const { userId, transactionId } = req.params;
+      const { cardId, name, value, description, type, date } = req.body;
 
+      if (!cardId || !value || !type || !date) {
+        return res.status(400).json({
+          message: "Cartão, valor, tipo e data são obrigatórios",
+        });
+      }
+
+      const db = await connectToDatabase();
+      const usersCollection = db.collection<User>("users");
+
+      // Verificar se o usuário existe
+      const user = await usersCollection.findOne({ id: userId });
+      if (!user) {
+        return res.status(400).json({ message: "Usuário não encontrado" });
+      }
+
+      const transactionsCollection = db.collection("transactions");
+
+      // Verificar se a transação existe
+      const transaction = await transactionsCollection.findOne({
+        id: transactionId,
+        "card.userId": userId,
+      });
+      if (!transaction) {
+        return res.status(400).json({ message: "Transação não encontrada" });
+      }
+
+      const cardsCollection = db.collection("cards");
+      const card = await cardsCollection.findOne({
+        _id: new ObjectId(cardId),
+        userId,
+      });
+      if (!card) {
+        return res.status(400).json({ message: "Cartão não encontrado" });
+      }
+
+      // Atualizar o saldo do cartão
+      if (transaction.type === "expense") {
+        card.value += transaction.value; // Reverter o valor da transação original
+      } else if (transaction.type === "income") {
+        card.value -= transaction.value;
+      }
+
+      // Atualizar o saldo do cartão com a nova transação
+      if (type === "expense") {
+        card.value -= value;
+      } else if (type === "income") {
+        card.value += value;
+      }
+
+      await cardsCollection.updateOne(
+        { _id: new ObjectId(cardId) },
+        {
+          $set: {
+            value: card.value,
+            updatedAt: new Date().toISOString(),
+          },
+        }
+      );
+
+      // Atualizar a transação
+      await transactionsCollection.updateOne(
+        { id: transactionId },
+        {
+          $set: {
+            name,
+            value,
+            description,
+            type,
+            date,
+            updatedAt: new Date().toISOString(),
+          },
+        }
+      );
+
+      res.status(200).json({ message: "Transação atualizada com sucesso" });
+    } catch (error) {
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  }
   async createEvent(req: Request, res: Response) {
     try {
       const eventValidation = this.addNewEventSchema.safeParse(req.body);
