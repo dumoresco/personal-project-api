@@ -111,6 +111,7 @@ class TransactionService {
                 // Calcular quantos registros pular (skip) e quantos limitar (limit)
                 const transactions = yield transactionsCollection
                     .find(query)
+                    .sort({ createdAt: -1 })
                     .skip(skip) // Pular registros conforme a página
                     .limit(size) // Limitar o número de registros por página
                     .toArray();
