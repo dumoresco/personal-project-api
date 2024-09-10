@@ -119,56 +119,38 @@ export class TransactionService {
 
   async listTransactions(req: Request, res: Response) {
     try {
-      const { userId } = req.params;
-      const { search, bank, startDate, endDate } = req.query;
-      // Obter page, size, search e status da query string, com valores padrão
+      const db = await connectToDatabase();
+      const transactionsCollection = db.collection("transactions");
+
       const page = parseInt(req.query.page as string) || 1; // Página atual (padrão: 1)
       const size = parseInt(req.query.size as string) || 10; // Tamanho da página (padrão: 10)
-      const db = await connectToDatabase();
-      const usersCollection = db.collection<User>("users");
+      const search = (req.query.search as string) || "";
 
-      const user = await usersCollection.findOne({ id: userId });
-      if (!user) {
-        return res.status(400).json({ message: "Usuário não encontrado" });
-      }
-
-      const transactionsCollection = db.collection("transactions");
-      const total = await transactionsCollection.countDocuments();
+      const skip = (page - 1) * size;
 
       let query: any = {};
 
       if (search) {
-        query = {
-          ...query,
-          name: { $regex: search, $options: "i" }, // Filtra pelo nome da transação, case-insensitive
-        };
+        query.$or = [
+          { name: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
+        ];
       }
 
-      // filtra pelo card.id
-      if (bank && bank !== "all") {
-        query = {
-          ...query,
-          "card.id": bank,
-        };
-      }
-
-      if (startDate && endDate) {
-        query.date = {
-          $gte: startDate,
-          $lte: endDate,
-        };
-      }
+      // Contar o total de documentos com base na query filtrada
+      const total = await transactionsCollection.countDocuments(query);
 
       // Calcular quantos registros pular (skip) e quantos limitar (limit)
-      const skip = (page - 1) * size;
       const transactions = await transactionsCollection
         .find(query)
         .skip(skip) // Pular registros conforme a página
         .limit(size) // Limitar o número de registros por página
         .toArray();
 
-      // Get the total count of transactions for the query
+      // Calcular o total de páginas com base no total filtrado
       const totalPages = Math.ceil(total / size);
+
+      // Retornar as transações e informações de paginação
       res.status(200).json({
         transactions,
         totalPages,

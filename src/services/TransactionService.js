@@ -93,42 +93,30 @@ class TransactionService {
     listTransactions(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { userId } = req.params;
-                const { search, bank, startDate, endDate } = req.query;
-                // Obter page, size, search e status da query string, com valores padrão
+                const db = yield (0, db_1.connectToDatabase)();
+                const transactionsCollection = db.collection("transactions");
                 const page = parseInt(req.query.page) || 1; // Página atual (padrão: 1)
                 const size = parseInt(req.query.size) || 10; // Tamanho da página (padrão: 10)
-                const db = yield (0, db_1.connectToDatabase)();
-                const usersCollection = db.collection("users");
-                const user = yield usersCollection.findOne({ id: userId });
-                if (!user) {
-                    return res.status(400).json({ message: "Usuário não encontrado" });
-                }
-                const transactionsCollection = db.collection("transactions");
-                const total = yield transactionsCollection.countDocuments();
+                const search = req.query.search || "";
+                const skip = (page - 1) * size;
                 let query = {};
                 if (search) {
-                    query = Object.assign(Object.assign({}, query), { name: { $regex: search, $options: "i" } });
+                    query.$or = [
+                        { name: { $regex: search, $options: "i" } },
+                        { description: { $regex: search, $options: "i" } },
+                    ];
                 }
-                // filtra pelo card.id
-                if (bank && bank !== "all") {
-                    query = Object.assign(Object.assign({}, query), { "card.id": bank });
-                }
-                if (startDate && endDate) {
-                    query.date = {
-                        $gte: startDate,
-                        $lte: endDate,
-                    };
-                }
+                // Contar o total de documentos com base na query filtrada
+                const total = yield transactionsCollection.countDocuments(query);
                 // Calcular quantos registros pular (skip) e quantos limitar (limit)
-                const skip = (page - 1) * size;
                 const transactions = yield transactionsCollection
                     .find(query)
                     .skip(skip) // Pular registros conforme a página
                     .limit(size) // Limitar o número de registros por página
                     .toArray();
-                // Get the total count of transactions for the query
+                // Calcular o total de páginas com base no total filtrado
                 const totalPages = Math.ceil(total / size);
+                // Retornar as transações e informações de paginação
                 res.status(200).json({
                     transactions,
                     totalPages,
